@@ -2,9 +2,6 @@ const widgets = require('@jupyter-widgets/base');
 const _ = require('lodash');
 const data = require('../package.json');
 
-console.log('----------------------------------------------');
-console.log(data);
-
 
 const UploadModel = widgets.DOMWidgetModel.extend({
     defaults: _.extend(widgets.DOMWidgetModel.prototype.defaults(), {
@@ -25,10 +22,14 @@ const UploadModel = widgets.DOMWidgetModel.extend({
         value: [],
         error: '',
         style: null,
+
+        busy: false,
+        _current_chunk: null
     })
 });
 
 const UploadView = widgets.DOMWidgetView.extend({
+    tagName: 'button',
     class_map: {
         primary: ['mod-primary'],
         success: ['mod-success'],
@@ -37,111 +38,257 @@ const UploadView = widgets.DOMWidgetView.extend({
         danger: ['mod-danger'],
     },
 
-    preinitialize: function () {
-        console.log('fileupload preinitialized!');
-        // Must set this before the initialize method creates the element
-        this.tagName = 'button';
-    },
+    _icon: null,
+    _description: null,
+    _chunks_total: 0,
+    _chunks_complete: 0,
 
     render: function () {
-        console.log('fileupload rendered!');
-        // widgets.DOMWidgetView.render();
+        // Add classes
+        this.el.classList.add('jupyter-widgets', 'widget-upload', 'jupyter-button');
 
-        this.el.classList.add('jupyter-widgets');
-        this.el.classList.add('widget-upload');
-        this.el.classList.add('jupyter-button');
-
+        // Create the file upload element
         this.fileInput = document.createElement('input');
         this.fileInput.type = 'file';
         this.fileInput.style.display = 'none';
 
-        this.el.addEventListener('click', () => {
-            console.log('basic click');
-            this.fileInput.click();
-        });
+        // Add click events
+        this.el.addEventListener('click', () => this.fileInput.click());
+        this.fileInput.addEventListener('click', () => (this.fileInput.value = ''));
 
-        this.fileInput.addEventListener('click', () => {
-            console.log('file click');
-            this.fileInput.value = '';
-        });
+        // Handle file change events
+        this.fileInput.addEventListener('change', () => this.upload_files());
 
-        this.fileInput.addEventListener('change', () => {
-            console.log('change event!');
-            const promisesFile = [];
-
-            Array.from(this.fileInput.files ?? []).forEach((file) => {
-                promisesFile.push(
-                    new Promise((resolve, reject) => {
-                        const fileReader = new FileReader();
-                        fileReader.onload = () => {
-                            // We know we can read the result as an array buffer since
-                            // we use the `.readAsArrayBuffer` method
-                            const content = fileReader.result;
-                            resolve({
-                                content,
-                                name: file.name,
-                                type: file.type,
-                                size: file.size,
-                                last_modified: file.lastModified,
-                            });
-                        };
-                        fileReader.onerror = () => {
-                            reject();
-                        };
-                        fileReader.onabort = fileReader.onerror;
-                        fileReader.readAsArrayBuffer(file);
-                    })
-                );
-            });
-
-            Promise.all(promisesFile)
-                .then((files) => {
-                    this.model.set({
-                        value: files,
-                        error: '',
-                    });
-                    this.touch();
-                })
-                .catch((err) => {
-                    console.error('error in file upload: %o', err);
-                    this.model.set({
-                        error: err,
-                    });
-                    this.touch();
-                });
-        });
-
+        // Handle button style changes
         this.listenTo(this.model, 'change:button_style', this.update_button_style);
         this.set_button_style();
-        this.update(); // Set defaults.
+
+        // Set the default values
+        this.update();
+    },
+
+    update_upload_label: function(initial, final) {
+        if (initial) {
+            this._icon = this.model.get('icon');
+            this._description = this.model.get('description');
+            this.model.set('icon', '');
+        }
+        else if (final) {
+            this.model.set('icon', this._icon);
+            this.model.set('description', this._description);
+        }
+        else {
+            const percent = Math.floor(this._chunks_complete * (100 / this._chunks_total));
+            this.model.set('description', `${percent}%`);
+        }
+        this.touch();
+    },
+
+    chunk_file: function(file) {
+        const chunk_size = 1024 * 1024;
+        const chunks_in_file = Math.ceil(file.size / chunk_size);
+        const chunk_promises = [];
+        const chunks = [];
+
+        // Split the file into chunks
+        let count = 0;
+        while (count <= chunks_in_file) {
+            console.log(`Creating chunk: ${count}`);
+            let offset = count * chunk_size;
+            chunks.push(file.slice(offset, chunk_size));
+            count++;
+        }
+
+        chunks.forEach((chunk) => {
+            const encoded_chunk = btoa(String.fromCharCode(...new Uint8Array(chunk)));
+            const chunk_complete_promise = new Promise((resolve, reject) => {
+                this.model.set('_current_chunk', encoded_chunk);
+                this.touch();
+                this._chunks_complete++;
+                // TODO: "chunk finished" callback
+                console.log(`Chunk uploaded`);
+                resolve({
+                    chunk: this._chunks_complete,
+                    total: this._chunks_total
+                });
+            });
+            chunk_promises.push(chunk_complete_promise);
+        });
+
+        return chunk_promises;
+    },
+
+    upload_files: async function() {
+        /**
+         * Set busy
+         * Estimate number of chunks & percent each represents
+         * Set description = % Complete
+         * Cycle through files
+         *   Chunk file and cycle through chunks
+         *     Set _current_chunk to base64 encoded chunk, let it sync
+         *       On sync callback: Set description as percent complete, update counter
+         *       Make chunk complete callback
+         *       Start next chunk
+         * All done: Set description back to usual,
+         *   Make all done callback
+         *   set busy = false
+         */
+        console.log('Begin new upload implementation');
+
+        // Set the widget as busy
+        this.model.set('busy', true);
+        this.touch();
+
+        // Estimate the number of chunks to upload
+        this._chunks_total = 0;
+        this._chunks_complete = 0;
+        const files = Array.from(this.fileInput.files ?? []);
+        files.forEach((file) => this._chunks_total += Math.ceil(file.size / (1024 * 1024)));
+
+        // Set the uploading label
+        this.update_upload_label(true, false);
+
+        console.log('--------------------');
+        console.log(`Chunks: ${this._chunks_total}`);
+
+        // Cycle through all files
+        const file_promises = [];
+        files.forEach((file) => {
+            console.log(`Cycling through file: ${file.name}`);
+            const file_complete_promise = new Promise(async (resolve, reject) => {
+                console.log(`Preparing file`);
+                const chunk_promises = this.chunk_file(file);
+                console.log(`Chunk promises created`);
+
+                for (const cp of chunk_promises) {
+                    await (() => cp);
+                }
+                console.log(`File resolved: ${file.size}`);
+                // TODO: Make a "file complete" callback
+                resolve({
+                    name: file.name,
+                    type: file.type,
+                    size: file.size,
+                    last_modified: file.lastModified,
+                });
+
+                // Promise.all(chunk_promises).then((chunks) => {
+                //     console.log(`File resolved: ${file.size}`);
+                //     // TODO: Make a "file complete" callback
+                //     resolve({
+                //         name: file.name,
+                //         type: file.type,
+                //         size: file.size,
+                //         last_modified: file.lastModified,
+                //     });
+                // })
+                // .catch((err) => {
+                //     console.error(`Error in upload: ${err}`);
+                //     this.model.set({
+                //         error: err,
+                //     });
+                //     this.touch();
+                // });
+            });
+            file_promises.push(file_complete_promise);
+        });
+        console.log(`Executing file promises: ${file_promises}`);
+        console.log(file_promises);
+        const files_data = [];
+        for (const fp of file_promises) {
+            files_data.push(await (() => fp));
+        }
+        console.log(`All files uploaded`);
+        // TODO: Make an "all uploads complete" callback
+        this.model.set('busy', false);
+        this.model.set({
+            value: files_data,
+            error: '',
+        });
+        this.update_upload_label(false, true);
+
+        // Promise.all(file_promises).then((files_data) => {
+        //     console.log(`All files uploaded`);
+        //     // TODO: Make an "all uploads complete" callback
+        //     this.model.set('busy', false);
+        //     this.model.set({
+        //         value: files_data,
+        //         error: '',
+        //     });
+        //     this.update_upload_label(false, true);
+        // })
+        // .catch((err) => {
+        //     console.error(`Error in upload: ${err}`);
+        //     this.model.set({
+        //         error: err,
+        //     });
+        //     this.touch();
+        // });
+
+
+        // TODO
+        // const promisesFile = [];
+        //
+        // Array.from(this.fileInput.files ?? []).forEach((file) => {
+        //     promisesFile.push(
+        //         new Promise((resolve, reject) => {
+        //             const fileReader = new FileReader();
+        //             fileReader.onload = () => {
+        //                 // We know we can read the result as an array buffer since
+        //                 // we use the `.readAsArrayBuffer` method
+        //                 const content = fileReader.result;
+        //                 resolve({
+        //                     content,
+        //                     name: file.name,
+        //                     type: file.type,
+        //                     size: file.size,
+        //                     last_modified: file.lastModified,
+        //                 });
+        //             };
+        //             fileReader.onerror = () => reject();
+        //             fileReader.onabort = fileReader.onerror;
+        //             fileReader.readAsArrayBuffer(file);
+        //         })
+        //     );
+        // });
+        //
+        // Promise.all(promisesFile)
+        //     .then((files) => {
+        //         this.model.set({
+        //             value: files,
+        //             error: '',
+        //         });
+        //         this.touch();
+        //     })
+        //     .catch((err) => {
+        //         console.error('error in file upload: %o', err);
+        //         this.model.set({
+        //             error: err,
+        //         });
+        //         this.touch();
+        //     });
     },
 
     update: function () {
+        // Handle configurable properties
         this.el.disabled = this.model.get('disabled');
         this.el.setAttribute('title', this.model.get('tooltip'));
+        this.fileInput.accept = this.model.get('accept');
+        this.fileInput.multiple = this.model.get('multiple');
 
-        const value = this.model.get('value');
-        const description = `${this.model.get('description')} (${value.length})`;
+        // Add label and icon
+        const description = this.model.get('description');
         const icon = this.model.get('icon');
-
         if (description.length || icon.length) {
             this.el.textContent = '';
             if (icon.length) {
                 const i = document.createElement('i');
-                i.classList.add('fa');
-                i.classList.add('fa-' + icon);
-                if (description.length === 0) {
-                    i.classList.add('center');
-                }
+                i.classList.add('fa', 'fa-' + icon);
+                if (description.length === 0) i.classList.add('center');
                 this.el.appendChild(i);
             }
             this.el.appendChild(document.createTextNode(description));
         }
-
-        this.fileInput.accept = this.model.get('accept');
-        this.fileInput.multiple = this.model.get('multiple');
-
-        // return widgets.DOMWidgetView.update();
     },
 
     update_button_style: function () {
@@ -152,9 +299,7 @@ const UploadView = widgets.DOMWidgetView.extend({
         );
     },
 
-    set_button_style: function () {
-        this.set_mapped_classes(this.class_map, 'button_style', this.el);
-    }
+    set_button_style: function () { this.set_mapped_classes(this.class_map, 'button_style', this.el); }
 });
 
 module.exports = {

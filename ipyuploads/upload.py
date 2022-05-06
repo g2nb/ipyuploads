@@ -59,6 +59,9 @@ class Upload(DescriptionWidget, ValueWidget, CoreWidget):
     value = TypedTuple(Dict(), help='The file upload value').tag(
         sync=True, echo_update=False, **_value_serialization)
 
+    busy = Bool(help='Is the widget busy uploading files').tag(sync=True)
+    _current_chunk = Unicode(help='The file chunk which is currently being uploaded').tag(sync=True)
+
     @default('description')
     def _default_description(self):
         return 'Upload'

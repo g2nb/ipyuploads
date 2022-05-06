@@ -84,6 +84,14 @@ const UploadView = widgets.DOMWidgetView.extend({
         this.touch();
     },
 
+    encode_chunk: function(blob) {
+        return new Promise((resolve, _) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.readAsDataURL(blob);
+        });
+    },
+
     chunk_file: function(file) {
         const chunk_size = 1024 * 1024;
         const chunks_in_file = Math.ceil(file.size / chunk_size);
@@ -92,15 +100,15 @@ const UploadView = widgets.DOMWidgetView.extend({
 
         // Split the file into chunks
         let count = 0;
-        while (count <= chunks_in_file) {
+        while (count < chunks_in_file) {
             console.log(`Creating chunk: ${count}`);
             let offset = count * chunk_size;
             chunks.push(file.slice(offset, chunk_size));
             count++;
         }
 
-        chunks.forEach((chunk) => {
-            const encoded_chunk = btoa(String.fromCharCode(...new Uint8Array(chunk)));
+        chunks.forEach(async (chunk) => {
+            const encoded_chunk = await this.encode_chunk(chunk);
             const chunk_complete_promise = new Promise((resolve, reject) => {
                 this.model.set('_current_chunk', encoded_chunk);
                 this.touch();

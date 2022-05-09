@@ -1,3 +1,5 @@
+import base64
+import json
 from ipywidgets import ButtonStyle, DOMWidget, register, CoreWidget, ValueWidget, widget_serialization
 from ipywidgets.widgets.trait_types import InstanceDict, TypedTuple
 from ipywidgets.widgets.widget_description import DescriptionWidget
@@ -8,9 +10,10 @@ from datetime import datetime, timezone
 
 def _deserialize_single_file(js):
     uploaded_file = Bunch()
-    for attribute in ['name', 'type', 'size', 'content']:
-        uploaded_file[attribute] = js[attribute]
-    uploaded_file['last_modified'] = datetime.fromtimestamp(js['last_modified'] / 1000,tz=timezone.utc)
+    if js:
+        for attribute in ['name', 'type', 'size']:
+            uploaded_file[attribute] = js[attribute]
+        uploaded_file['last_modified'] = datetime.fromtimestamp(js['last_modified'] / 1000,tz=timezone.utc)
     return uploaded_file
 
 
@@ -20,9 +23,10 @@ def _deserialize_value(js, _):
 
 def _serialize_single_file(uploaded_file):
     js = {}
-    for attribute in ['name', 'type', 'size', 'content']:
-        js[attribute] = uploaded_file[attribute]
-    js['last_modified'] = int(uploaded_file['last_modified'].timestamp() * 1000)
+    if uploaded_file:
+        for attribute in ['name', 'type', 'size']:
+            js[attribute] = uploaded_file[attribute]
+        js['last_modified'] = int(uploaded_file['last_modified'].timestamp() * 1000)
     return js
 
 
@@ -62,6 +66,51 @@ class Upload(DescriptionWidget, ValueWidget, CoreWidget):
     busy = Bool(help='Is the widget busy uploading files').tag(sync=True)
     _current_chunk = Unicode(help='The file chunk which is currently being uploaded').tag(sync=True)
 
+    def __init__(self, **kwargs):
+        super(Upload, self).__init__(**kwargs)
+        self.observe(self.handle_events)
+        self.on_msg(self.handle_messages)
+
     @default('description')
     def _default_description(self):
         return 'Upload'
+
+    def handle_events(self, event):
+        if event['name'] == '_current_chunk' and event['type'] == 'change':
+            print('Writing Chunk to Disk')
+            print(len(event["new"]))
+            self.write_chunk(event['new'])
+        else:
+            print(f'Handling {event["name"]}')
+
+    def write_chunk(self, json_str):
+        chunk_data = json.loads(json_str)
+        base64_string = chunk_data['chunk']
+        print('----------- CHUNK')
+        print(chunk_data['count'])
+        filehandle = open(f"{chunk_data['file']}{chunk_data['count']}", 'a')
+        filehandle.write(base64.b64decode(base64_string).decode("utf-8"))
+        filehandle.close()
+
+    def handle_messages(self, _, content, buffers):
+        """Handle messages sent from the client-side"""
+        print('message')
+        if content.get('event', '') == 'upload':
+            print('----------- CHUNK MSG')
+            base64_string = content.get('chunk', 'XXX')
+            print(content.get('length', len(base64_string)))
+            filehandle = open(f"{content.get('file', 'FILE')}", 'a')
+            filehandle.write(base64.b64decode(base64_string).decode("utf-8"))
+            filehandle.close()
+
+        # if content.get('event', '') == 'method':  # Handle method call events
+        #     method_name = content.get('method', '')
+        #     params = content.get('params', None)
+        #     if method_name and hasattr(self, method_name) and not params:
+        #         getattr(self, method_name)()
+        #     elif method_name and hasattr(self, method_name) and params:
+        #         try:
+        #             kwargs = json.loads(params)
+        #             getattr(self, method_name)(**kwargs)
+        #         except json.JSONDecodeError:
+        #             pass

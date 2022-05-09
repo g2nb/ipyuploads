@@ -92,38 +92,55 @@ const UploadView = widgets.DOMWidgetView.extend({
         });
     },
 
-    chunk_file: function(file) {
+    chunk_file: async function(file) {
         const chunk_size = 1024 * 1024;
         const chunks_in_file = Math.ceil(file.size / chunk_size);
-        const chunk_promises = [];
+        const chunk_functions = [];
         const chunks = [];
 
         // Split the file into chunks
         let count = 0;
+        window.chunk_file = file; // TODO: REMOVE ME
         while (count < chunks_in_file) {
             console.log(`Creating chunk: ${count}`);
             let offset = count * chunk_size;
-            chunks.push(file.slice(offset, chunk_size));
+            let file_blob = file.slice(offset, offset + chunk_size);
+            console.log(`BLOB SIZE: ${file_blob.size}`);
+            chunks.push(file_blob);
             count++;
         }
 
-        chunks.forEach(async (chunk) => {
+        for (const chunk of chunks) {
             const encoded_chunk = await this.encode_chunk(chunk);
-            const chunk_complete_promise = new Promise((resolve, reject) => {
-                this.model.set('_current_chunk', encoded_chunk);
-                this.touch();
+            const chunk_function = async () => {
+                console.log('setting chunk');
+                console.log(`length: ${encoded_chunk.length}`);
+                this.send({
+                    "event": "upload",
+                    "file": file.name,
+                    "count": this._chunks_complete + 1,
+                    "total": this._chunks_total,
+                    "chunk": encoded_chunk
+                });
+                // this.model.set('_current_chunk', JSON.stringify({
+                //     "file": file.name,
+                //     "count": this._chunks_complete + 1,
+                //     "total": this._chunks_total,
+                //     "chunk": encoded_chunk
+                // }));
+                // this.model.save();
                 this._chunks_complete++;
                 // TODO: "chunk finished" callback
                 console.log(`Chunk uploaded`);
-                resolve({
+                return {
                     chunk: this._chunks_complete,
                     total: this._chunks_total
-                });
-            });
-            chunk_promises.push(chunk_complete_promise);
-        });
+                };
+            }
+            chunk_functions.push(chunk_function);
+        }
 
-        return chunk_promises;
+        return chunk_functions;
     },
 
     upload_files: async function() {
@@ -160,51 +177,36 @@ const UploadView = widgets.DOMWidgetView.extend({
         console.log(`Chunks: ${this._chunks_total}`);
 
         // Cycle through all files
-        const file_promises = [];
+        const file_functions = [];
         files.forEach((file) => {
             console.log(`Cycling through file: ${file.name}`);
-            const file_complete_promise = new Promise(async (resolve, reject) => {
+            const file_func = async () => {
                 console.log(`Preparing file`);
-                const chunk_promises = this.chunk_file(file);
+                const chunk_funcs = await this.chunk_file(file);
                 console.log(`Chunk promises created`);
+                console.log(chunk_funcs.length);
 
-                for (const cp of chunk_promises) {
-                    await (() => cp);
+                for (const cp of chunk_funcs) {
+                    console.log('awaiting chunk func')
+                    await cp();
                 }
                 console.log(`File resolved: ${file.size}`);
                 // TODO: Make a "file complete" callback
-                resolve({
+                return {
                     name: file.name,
                     type: file.type,
                     size: file.size,
                     last_modified: file.lastModified,
-                });
-
-                // Promise.all(chunk_promises).then((chunks) => {
-                //     console.log(`File resolved: ${file.size}`);
-                //     // TODO: Make a "file complete" callback
-                //     resolve({
-                //         name: file.name,
-                //         type: file.type,
-                //         size: file.size,
-                //         last_modified: file.lastModified,
-                //     });
-                // })
-                // .catch((err) => {
-                //     console.error(`Error in upload: ${err}`);
-                //     this.model.set({
-                //         error: err,
-                //     });
-                //     this.touch();
-                // });
-            });
-            file_promises.push(file_complete_promise);
+                };
+            }
+            file_functions.push(file_func);
         });
-        console.log(`Executing file promises: ${file_promises}`);
-        console.log(file_promises);
+
+        console.log(`Executing file functions: ${file_functions}`);
+        console.log(file_functions);
         const files_data = [];
-        for (const fp of file_promises) {
-            files_data.push(await (() => fp));
+        for (const fp of file_functions) {
+            files_data.push(await fp());
         }
         console.log(`All files uploaded`);
         // TODO: Make an "all uploads complete" callback
@@ -214,6 +216,40 @@ const UploadView = widgets.DOMWidgetView.extend({
             error: '',
         });
         this.update_upload_label(false, true);
+
+
+        // async function zzz() {
+        //     const delay = ms => new Promise(res => setTimeout(res, ms));
+        //
+        //     function make_promise() {
+        //         return new Promise(async (resolve, reject) => {
+        //             console.log('started delay')
+        //             await delay(3000);
+        //             console.log('finish delay')
+        //             resolve({completed: true})
+        //         });
+        //     }
+        //
+        //     async function make_async() {
+        //         console.log('started delay')
+        //         await delay(3000);
+        //         console.log('finish delay')
+        //         return {completed: true};
+        //     }
+        //
+        //     const promises = [];
+        //     const test_results = []
+        //     console.log('creating promises');
+        //     for (let i = 0; i < 10; i++) promises.push(make_promise);
+        //     console.log('promises created, executing');
+        //     for (const fp of promises) {
+        //         test_results.push(await fp());
+        //     }
+        //     console.log('execution finished');
+        //     console.log(test_results);
+        //     return test_results;
+        // }
+
 
         // Promise.all(file_promises).then((files_data) => {
         //     console.log(`All files uploaded`);

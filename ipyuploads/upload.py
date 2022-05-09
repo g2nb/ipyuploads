@@ -1,6 +1,5 @@
 import base64
-import json
-from ipywidgets import ButtonStyle, DOMWidget, register, CoreWidget, ValueWidget, widget_serialization
+from ipywidgets import ButtonStyle, register, CoreWidget, ValueWidget, widget_serialization
 from ipywidgets.widgets.trait_types import InstanceDict, TypedTuple
 from ipywidgets.widgets.widget_description import DescriptionWidget
 from traitlets import Unicode, Bool, CaselessStrEnum, Dict, default, Bunch
@@ -13,7 +12,7 @@ def _deserialize_single_file(js):
     if js:
         for attribute in ['name', 'type', 'size']:
             uploaded_file[attribute] = js[attribute]
-        uploaded_file['last_modified'] = datetime.fromtimestamp(js['last_modified'] / 1000,tz=timezone.utc)
+        uploaded_file['last_modified'] = datetime.fromtimestamp(js['last_modified'] / 1000, tz=timezone.utc)
     return uploaded_file
 
 
@@ -60,57 +59,47 @@ class Upload(DescriptionWidget, ValueWidget, CoreWidget):
         help='Use a predefined styling for the button.').tag(sync=True)
     style = InstanceDict(ButtonStyle).tag(sync=True, **widget_serialization)
     error = Unicode(help='Error message').tag(sync=True)
-    value = TypedTuple(Dict(), help='The file upload value').tag(
-        sync=True, echo_update=False, **_value_serialization)
-
+    value = TypedTuple(Dict(), help='The file upload value').tag(sync=True, echo_update=False, **_value_serialization)
     busy = Bool(help='Is the widget busy uploading files').tag(sync=True)
-    _current_chunk = Unicode(help='The file chunk which is currently being uploaded').tag(sync=True)
+
+    chunk_complete = lambda self, name, count, total: None
+    file_complete = lambda self, name: None
+    all_files_complete = lambda self, names: None
 
     def __init__(self, **kwargs):
         super(Upload, self).__init__(**kwargs)
-        self.observe(self.handle_events)
         self.on_msg(self.handle_messages)
+
+        # Set optional callbacks
+        if 'chunk_complete' in kwargs: self.chunk_complete = kwargs['chunk_complete']
+        if 'file_complete' in kwargs: self.file_complete = kwargs['file_complete']
+        if 'all_files_complete' in kwargs: self.all_files_complete = kwargs['all_files_complete']
 
     @default('description')
     def _default_description(self):
         return 'Upload'
 
-    def handle_events(self, event):
-        if event['name'] == '_current_chunk' and event['type'] == 'change':
-            print('Writing Chunk to Disk')
-            print(len(event["new"]))
-            self.write_chunk(event['new'])
-        else:
-            print(f'Handling {event["name"]}')
-
-    def write_chunk(self, json_str):
-        chunk_data = json.loads(json_str)
-        base64_string = chunk_data['chunk']
-        print('----------- CHUNK')
-        print(chunk_data['count'])
-        filehandle = open(f"{chunk_data['file']}{chunk_data['count']}", 'a')
-        filehandle.write(base64.b64decode(base64_string).decode("utf-8"))
-        filehandle.close()
+    @staticmethod
+    def write_chunk(name, encoded_chunk, first_chunk):
+        mode = 'w' if first_chunk else 'a'
+        with open(name, mode) as f:
+            f.write(base64.b64decode(encoded_chunk).decode("utf-8"))
 
     def handle_messages(self, _, content, buffers):
         """Handle messages sent from the client-side"""
-        print('message')
         if content.get('event', '') == 'upload':
-            print('----------- CHUNK MSG')
-            base64_string = content.get('chunk', 'XXX')
-            print(content.get('length', len(base64_string)))
-            filehandle = open(f"{content.get('file', 'FILE')}", 'a')
-            filehandle.write(base64.b64decode(base64_string).decode("utf-8"))
-            filehandle.close()
+            name = content.get('file', '')
+            encoded_chunk = content.get('chunk', '')
+            first_chunk = content.get('count', '') == 1
+            Upload.write_chunk(name, encoded_chunk, first_chunk)
+            self.chunk_complete(name=content.get('file', None),
+                                count=content.get('count', None),
+                                total=content.get('total', None))
+        elif content.get('event', '') == 'file_complete':
+            self.file_complete(name=content.get('name', None))
+        elif content.get('event', '') == 'all_files_complete':
+            self.all_files_complete(names=content.get('names', None))
 
-        # if content.get('event', '') == 'method':  # Handle method call events
-        #     method_name = content.get('method', '')
-        #     params = content.get('params', None)
-        #     if method_name and hasattr(self, method_name) and not params:
-        #         getattr(self, method_name)()
-        #     elif method_name and hasattr(self, method_name) and params:
-        #         try:
-        #             kwargs = json.loads(params)
-        #             getattr(self, method_name)(**kwargs)
-        #         except json.JSONDecodeError:
-        #             pass
+    @staticmethod
+    def default_callback(**kwargs):
+        pass

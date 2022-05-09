@@ -22,9 +22,7 @@ const UploadModel = widgets.DOMWidgetModel.extend({
         value: [],
         error: '',
         style: null,
-
         busy: false,
-        _current_chunk: null
     })
 });
 
@@ -73,7 +71,7 @@ const UploadView = widgets.DOMWidgetView.extend({
             this._description = this.model.get('description');
             this.model.set('icon', '');
         }
-        else if (final) {
+        if (final) {
             this.model.set('icon', this._icon);
             this.model.set('description', this._description);
         }
@@ -81,7 +79,7 @@ const UploadView = widgets.DOMWidgetView.extend({
             const percent = Math.floor(this._chunks_complete * (100 / this._chunks_total));
             this.model.set('description', `${percent}%`);
         }
-        this.touch();
+        this.model.save();
     },
 
     encode_chunk: function(blob) {
@@ -100,38 +98,27 @@ const UploadView = widgets.DOMWidgetView.extend({
 
         // Split the file into chunks
         let count = 0;
-        window.chunk_file = file; // TODO: REMOVE ME
         while (count < chunks_in_file) {
-            console.log(`Creating chunk: ${count}`);
             let offset = count * chunk_size;
             let file_blob = file.slice(offset, offset + chunk_size);
-            console.log(`BLOB SIZE: ${file_blob.size}`);
             chunks.push(file_blob);
             count++;
         }
 
+        count = 0;
         for (const chunk of chunks) {
             const encoded_chunk = await this.encode_chunk(chunk);
             const chunk_function = async () => {
-                console.log('setting chunk');
-                console.log(`length: ${encoded_chunk.length}`);
                 this.send({
                     "event": "upload",
                     "file": file.name,
-                    "count": this._chunks_complete + 1,
-                    "total": this._chunks_total,
+                    "count": count + 1,
+                    "total": chunks_in_file,
                     "chunk": encoded_chunk
                 });
-                // this.model.set('_current_chunk', JSON.stringify({
-                //     "file": file.name,
-                //     "count": this._chunks_complete + 1,
-                //     "total": this._chunks_total,
-                //     "chunk": encoded_chunk
-                // }));
-                // this.model.save();
+                count++;
                 this._chunks_complete++;
-                // TODO: "chunk finished" callback
-                console.log(`Chunk uploaded`);
+                this.update_upload_label(false, false)
                 return {
                     chunk: this._chunks_complete,
                     total: this._chunks_total
@@ -144,25 +131,9 @@ const UploadView = widgets.DOMWidgetView.extend({
     },
 
     upload_files: async function() {
-        /**
-         * Set busy
-         * Estimate number of chunks & percent each represents
-         * Set description = % Complete
-         * Cycle through files
-         *   Chunk file and cycle through chunks
-         *     Set _current_chunk to base64 encoded chunk, let it sync
-         *       On sync callback: Set description as percent complete, update counter
-         *       Make chunk complete callback
-         *       Start next chunk
-         * All done: Set description back to usual,
-         *   Make all done callback
-         *   set busy = false
-         */
-        console.log('Begin new upload implementation');
-
         // Set the widget as busy
         this.model.set('busy', true);
-        this.touch();
+        this.model.save();
 
         // Estimate the number of chunks to upload
         this._chunks_total = 0;
@@ -173,25 +144,16 @@ const UploadView = widgets.DOMWidgetView.extend({
         // Set the uploading label
         this.update_upload_label(true, false);
 
-        console.log('--------------------');
-        console.log(`Chunks: ${this._chunks_total}`);
-
         // Cycle through all files
         const file_functions = [];
         files.forEach((file) => {
-            console.log(`Cycling through file: ${file.name}`);
             const file_func = async () => {
-                console.log(`Preparing file`);
                 const chunk_funcs = await this.chunk_file(file);
-                console.log(`Chunk promises created`);
-                console.log(chunk_funcs.length);
-
-                for (const cp of chunk_funcs) {
-                    console.log('awaiting chunk func')
-                    await cp();
-                }
-                console.log(`File resolved: ${file.size}`);
-                // TODO: Make a "file complete" callback
+                for (const cp of chunk_funcs) await cp();
+                this.send({
+                    "event": "file_complete",
+                    "name": file.name
+                });
                 return {
                     name: file.name,
                     type: file.type,
@@ -202,115 +164,18 @@ const UploadView = widgets.DOMWidgetView.extend({
             file_functions.push(file_func);
         });
 
-        console.log(`Executing file functions: ${file_functions}`);
-        console.log(file_functions);
         const files_data = [];
-        for (const fp of file_functions) {
-            files_data.push(await fp());
-        }
-        console.log(`All files uploaded`);
-        // TODO: Make an "all uploads complete" callback
+        for (const fp of file_functions) files_data.push(await fp());
         this.model.set('busy', false);
         this.model.set({
             value: files_data,
             error: '',
         });
         this.update_upload_label(false, true);
-
-
-        // async function zzz() {
-        //     const delay = ms => new Promise(res => setTimeout(res, ms));
-        //
-        //     function make_promise() {
-        //         return new Promise(async (resolve, reject) => {
-        //             console.log('started delay')
-        //             await delay(3000);
-        //             console.log('finish delay')
-        //             resolve({completed: true})
-        //         });
-        //     }
-        //
-        //     async function make_async() {
-        //         console.log('started delay')
-        //         await delay(3000);
-        //         console.log('finish delay')
-        //         return {completed: true};
-        //     }
-        //
-        //     const promises = [];
-        //     const test_results = []
-        //     console.log('creating promises');
-        //     for (let i = 0; i < 10; i++) promises.push(make_promise);
-        //     console.log('promises created, executing');
-        //     for (const fp of promises) {
-        //         test_results.push(await fp());
-        //     }
-        //     console.log('execution finished');
-        //     console.log(test_results);
-        //     return test_results;
-        // }
-
-
-        // Promise.all(file_promises).then((files_data) => {
-        //     console.log(`All files uploaded`);
-        //     // TODO: Make an "all uploads complete" callback
-        //     this.model.set('busy', false);
-        //     this.model.set({
-        //         value: files_data,
-        //         error: '',
-        //     });
-        //     this.update_upload_label(false, true);
-        // })
-        // .catch((err) => {
-        //     console.error(`Error in upload: ${err}`);
-        //     this.model.set({
-        //         error: err,
-        //     });
-        //     this.touch();
-        // });
-
-
-        // TODO
-        // const promisesFile = [];
-        //
-        // Array.from(this.fileInput.files ?? []).forEach((file) => {
-        //     promisesFile.push(
-        //         new Promise((resolve, reject) => {
-        //             const fileReader = new FileReader();
-        //             fileReader.onload = () => {
-        //                 // We know we can read the result as an array buffer since
-        //                 // we use the `.readAsArrayBuffer` method
-        //                 const content = fileReader.result;
-        //                 resolve({
-        //                     content,
-        //                     name: file.name,
-        //                     type: file.type,
-        //                     size: file.size,
-        //                     last_modified: file.lastModified,
-        //                 });
-        //             };
-        //             fileReader.onerror = () => reject();
-        //             fileReader.onabort = fileReader.onerror;
-        //             fileReader.readAsArrayBuffer(file);
-        //         })
-        //     );
-        // });
-        //
-        // Promise.all(promisesFile)
-        //     .then((files) => {
-        //         this.model.set({
-        //             value: files,
-        //             error: '',
-        //         });
-        //         this.touch();
-        //     })
-        //     .catch((err) => {
-        //         console.error('error in file upload: %o', err);
-        //         this.model.set({
-        //             error: err,
-        //         });
-        //         this.touch();
-        //     });
+        this.send({
+            "event": "all_files_complete",
+            "names": files_data
+        });
     },
 
     update: function () {

@@ -1,19 +1,16 @@
 from __future__ import print_function
-
-import json
-import os
-
+from pathlib import Path
 from setuptools import setup, find_packages
 from os.path import join as pjoin
-from jupyter_packaging import create_cmdclass,install_npm,ensure_targets,combine_commands,get_version
+from jupyter_packaging import create_cmdclass, install_npm, ensure_targets, combine_commands
+import json
 
 
-here = os.path.dirname(os.path.abspath(__file__))
+here = Path(__file__).parent.resolve()
 js_dir = pjoin(here, 'js')
 
 name = 'ipyuploads'
 long_description = (here / "README.md").read_text()
-version = get_version(pjoin(name, '_version.py'))
 
 # Get the package info from package.json
 pkg_json = json.loads((here / "js/package.json").read_bytes())

@@ -2,7 +2,10 @@
   "name": "@g2nb/ipyuploads",
   "version": "0.1.0",
   "description": "A Jupyter file widget with chunked upload capabilities",
-  "author": "Thorin Tabor",
+  "author": {
+    "name": "Thorin Tabor",
+    "email": "tmtabor@cloud.ucsd.edu"
+  },
   "license": "BSD-3-Clause",
   "main": "lib/index.js",
   "homepage": "https://github.com/g2nb/ipyuploads",

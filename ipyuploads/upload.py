@@ -7,36 +7,33 @@ from ._version import __npm_module__, __version__
 from datetime import datetime, timezone
 
 
-def _deserialize_single_file(js):
-    uploaded_file = Bunch()
-    if js:
-        for attribute in ['name', 'type', 'size']:
-            uploaded_file[attribute] = js[attribute]
-        uploaded_file['last_modified'] = datetime.fromtimestamp(js['last_modified'] / 1000, tz=timezone.utc)
-    return uploaded_file
+class ValueSerialization:
 
+    @staticmethod
+    def serialize_single_file(uploaded_file):
+        js = {}
+        if uploaded_file:
+            for attribute in ['name', 'type', 'size']:
+                js[attribute] = uploaded_file[attribute]
+            js['last_modified'] = int(uploaded_file['last_modified'].timestamp() * 1000)
+        return js
 
-def _deserialize_value(js, _):
-    return [_deserialize_single_file(entry) for entry in js]
+    @staticmethod
+    def serialize_value(value, _):
+        return [ValueSerialization.serialize_single_file(value[key]) for key in value.keys()]
 
+    @staticmethod
+    def deserialize_single_file(js):
+        uploaded_file = Bunch()
+        if js:
+            for attribute in ['name', 'type', 'size']:
+                uploaded_file[attribute] = js[attribute]
+            uploaded_file['last_modified'] = datetime.fromtimestamp(js['last_modified'] / 1000, tz=timezone.utc)
+        return uploaded_file
 
-def _serialize_single_file(uploaded_file):
-    js = {}
-    if uploaded_file:
-        for attribute in ['name', 'type', 'size']:
-            js[attribute] = uploaded_file[attribute]
-        js['last_modified'] = int(uploaded_file['last_modified'].timestamp() * 1000)
-    return js
-
-
-def _serialize_value(value, _):
-    return [_serialize_single_file(entry) for entry in value]
-
-
-_value_serialization = {
-    'from_json': _deserialize_value,
-    'to_json': _serialize_value
-}
+    @staticmethod
+    def deserialize_value(js, _):
+        return {entry['name']: ValueSerialization.deserialize_single_file(entry) for entry in js}
 
 
 @register
@@ -59,7 +56,9 @@ class Upload(DescriptionWidget, ValueWidget, CoreWidget):
         help='Use a predefined styling for the button.').tag(sync=True)
     style = InstanceDict(ButtonStyle).tag(sync=True, **widget_serialization)
     error = Unicode(help='Error message').tag(sync=True)
-    value = TypedTuple(Dict(), help='The file upload value').tag(sync=True, echo_update=False, **_value_serialization)
+    value = Dict(Dict(), help='The file upload value').tag(sync=True, echo_update=False,
+                                                           from_json=ValueSerialization.deserialize_value,
+                                                           to_json=ValueSerialization.serialize_value)
     busy = Bool(help='Is the widget busy uploading files').tag(sync=True)
 
     chunk_complete = lambda self, name, count, total: None

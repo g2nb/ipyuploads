@@ -41,7 +41,7 @@ setup_args = dict(
     include_package_data=True,
     python_requires=">=3.6",
     install_requires=[
-        'ipywidgets>=7.6.0',
+        'ipywidgets>=7,<9',
     ],
     packages=find_packages(),
     zip_safe=False,

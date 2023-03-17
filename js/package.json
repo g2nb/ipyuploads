@@ -1,6 +1,6 @@
 {
   "name": "@g2nb/ipyuploads",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A Jupyter file widget with chunked upload capabilities",
   "author": {
     "name": "Thorin Tabor",
@@ -43,7 +43,7 @@
     "rimraf": "^2.6.1"
   },
   "dependencies": {
-    "@jupyter-widgets/base": "^1.1 || ^2 || ^3 || ^4",
+    "@jupyter-widgets/base": "^6",
     "lodash": "^4.17.4"
   },
   "jupyterlab": {

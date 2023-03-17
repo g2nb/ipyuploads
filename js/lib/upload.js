@@ -3,45 +3,50 @@ const _ = require('lodash');
 const data = require('../package.json');
 
 
-const UploadModel = widgets.DOMWidgetModel.extend({
-    defaults: _.extend(widgets.DOMWidgetModel.prototype.defaults(), {
-        _model_name: 'UploadModel',
-        _model_module: data.name,
-        _model_module_version: data.version,
+export class UploadModel extends widgets.DOMWidgetModel {
+    defaults() {
+        return {
+            ...super.defaults(),
+            _model_name: 'UploadModel',
+            _model_module: data.name,
+            _model_module_version: data.version,
 
-        _view_name: 'UploadView',
-        _view_module: data.name,
-        _view_module_version: data.version,
+            _view_name: 'UploadView',
+            _view_module: data.name,
+            _view_module_version: data.version,
 
-        accept: '',
-        description: 'Upload',
-        disabled: false,
-        icon: 'upload',
-        button_style: '',
-        multiple: false,
-        value: [],
-        error: '',
-        style: null,
-        busy: false,
-    })
-});
+            accept: '',
+            description: 'Upload',
+            disabled: false,
+            icon: 'upload',
+            button_style: '',
+            multiple: false,
+            value: [],
+            error: '',
+            style: null,
+            busy: false
+        }
+    }
+}
 
-const UploadView = widgets.DOMWidgetView.extend({
-    tagName: 'button',
-    class_map: {
-        primary: ['mod-primary'],
-        success: ['mod-success'],
-        info: ['mod-info'],
-        warning: ['mod-warning'],
-        danger: ['mod-danger'],
-    },
+export class UploadView extends widgets.DOMWidgetView {
+    preinitialize() {
+        this.tagName = 'button';
+        this.class_map = {
+            primary: ['mod-primary'],
+            success: ['mod-success'],
+            info: ['mod-info'],
+            warning: ['mod-warning'],
+            danger: ['mod-danger'],
+        };
 
-    _icon: null,
-    _description: null,
-    _chunks_total: 0,
-    _chunks_complete: 0,
+        this._icon = null;
+        this._description = null;
+        this._chunks_total = 0;
+        this._chunks_complete = 0;
+    }
 
-    render: function () {
+    render() {
         // Add classes
         this.el.classList.add('jupyter-widgets', 'widget-upload', 'jupyter-button');
 
@@ -63,9 +68,9 @@ const UploadView = widgets.DOMWidgetView.extend({
 
         // Set the default values
         this.update();
-    },
+    }
 
-    update_upload_label: function(initial, final) {
+    update_upload_label(initial, final) {
         if (initial) {
             this._icon = this.model.get('icon');
             this._description = this.model.get('description');
@@ -80,17 +85,17 @@ const UploadView = widgets.DOMWidgetView.extend({
             this.model.set('description', `${percent}%`);
         }
         this.model.save();
-    },
+    }
 
-    encode_chunk: function(blob) {
+    encode_chunk(blob) {
         return new Promise((resolve, _) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result.split(',')[1]);
             reader.readAsDataURL(blob);
         });
-    },
+    }
 
-    chunk_file: async function(file) {
+    async chunk_file(file) {
         const chunk_size = 1024 * 1024;
         const chunks_in_file = Math.ceil(file.size / chunk_size);
         const chunk_functions = [];
@@ -128,9 +133,9 @@ const UploadView = widgets.DOMWidgetView.extend({
         }
 
         return chunk_functions;
-    },
+    }
 
-    upload_files: async function() {
+    async upload_files() {
         // Set the widget as busy
         this.model.set('busy', true);
         this.model.save();
@@ -176,9 +181,9 @@ const UploadView = widgets.DOMWidgetView.extend({
             "event": "all_files_complete",
             "names": files_data
         });
-    },
+    }
 
-    update: function () {
+    update() {
         // Handle configurable properties
         this.el.disabled = this.model.get('disabled');
         this.el.setAttribute('title', this.model.get('tooltip'));
@@ -198,20 +203,15 @@ const UploadView = widgets.DOMWidgetView.extend({
             }
             this.el.appendChild(document.createTextNode(description));
         }
-    },
+    }
 
-    update_button_style: function () {
+    update_button_style() {
         this.update_mapped_classes(
             this.class_map,
             'button_style',
             this.el
         );
-    },
+    }
 
-    set_button_style: function () { this.set_mapped_classes(this.class_map, 'button_style', this.el); }
-});
-
-module.exports = {
-    UploadModel: UploadModel,
-    UploadView: UploadView
-};
+    set_button_style() { this.set_mapped_classes(this.class_map, 'button_style', this.el); }
+}

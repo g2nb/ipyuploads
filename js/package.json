@@ -1,6 +1,6 @@
 {
   "name": "@g2nb/ipyuploads",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A Jupyter file widget with chunked upload capabilities",
   "author": {
     "name": "Thorin Tabor",

@@ -1,6 +1,6 @@
 import base64
 from ipywidgets import ButtonStyle, register, CoreWidget, ValueWidget, widget_serialization
-from ipywidgets.widgets.trait_types import InstanceDict, TypedTuple
+from ipywidgets.widgets.trait_types import InstanceDict
 from ipywidgets.widgets.widget_description import DescriptionWidget
 from traitlets import Unicode, Bool, CaselessStrEnum, Dict, default, Bunch
 from ._version import __npm_module__, __version__

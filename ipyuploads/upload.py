@@ -80,9 +80,13 @@ class Upload(DescriptionWidget, ValueWidget, CoreWidget):
 
     @staticmethod
     def write_chunk(name, encoded_chunk, first_chunk):
-        mode = 'w' if first_chunk else 'a'
-        with open(name, mode) as f:
-            f.write(base64.b64decode(encoded_chunk).decode("utf-8"))
+        mode = 'wb' if first_chunk else 'ab'
+        try:
+            with open(name, mode) as f:
+                f.write(base64.b64decode(encoded_chunk).decode("utf-8"))
+        except:
+            with open(name, mode) as f:
+                f.write(base64.b64decode(encoded_chunk))
 
     def handle_messages(self, _, content, buffers):
         """Handle messages sent from the client-side"""

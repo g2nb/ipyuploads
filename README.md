@@ -75,6 +75,7 @@ def all_files_complete(metadatas):
        metadatas - A list of metadata objects, one for each file. Each contains:
                    { 'name': 'the file's name', 
                      'type': 'mime-type of the file', 
-                     'last_modified': last modified data as an integer (number of milliseconds since the epoch) }"""
+                     'last_modified': last modified data as an integer 
+                                      (number of milliseconds since the epoch) }"""
     print(f'ALL FILES CALLBACK! {metadatas}')
 ```

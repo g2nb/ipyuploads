@@ -48,6 +48,33 @@ ipyuploads.Upload(accept='txt',           # Accept only text files
                   busy=False,             # Whether an upload is in progress
                   chunk_complete=foo,     # Callback when a chunk upload completes
                   file_complete=bar,      # Callback when a file upload completes
-                  all_files_complete=fo2, # Callback when all files complete
+                  all_files_complete=baz, # Callback when all files complete
                   )
+```
+
+The three callback functions defined above should have the following structure:
+
+```python
+def chunk_complete(name, count, total):
+    """Callback to be executed when a chunk finishes uploading
+    
+       name - Name of the file being uploaded
+       count - A counter of which chunk just finished uploading
+       total - The total number of chunks in this file"""
+    print(f'CHUNK CALLBACK! {name} {count} {total}')
+
+def file_complete(name):
+    """Callback to be executed when a file finishes uploading
+    
+       name - Name of the file that was just uploaded"""
+    print('FILE CALLBACK! ' + name)
+
+def all_files_complete(metadatas):
+    """Callback to be executed once all selected files finish uploading
+    
+       metadatas - A list of metadata objects, one for each file. Each contains:
+                   { 'name': 'the file's name', 
+                     'type': 'mime-type of the file', 
+                     'last_modified': last modified data as an integer (number of milliseconds since the epoch) }"""
+    print(f'ALL FILES CALLBACK! {metadatas}')
 ```

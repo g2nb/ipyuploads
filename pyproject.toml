@@ -32,7 +32,7 @@ classifiers = [
 dependencies = [
     "ipywidgets>=7,<9",
 ]
-version = "0.2.2"
+version = "0.2.3"
 
 [project.license]
 file = "LICENSE"
@@ -71,7 +71,7 @@ npm = [
 github_url = "https://github.com/g2nb/ipyuploads"
 
 [tool.tbump.version]
-current = "0.2.2"
+current = "0.2.3"
 regex = '''
   (?P<major>\d+)
   \.

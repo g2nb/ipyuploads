@@ -64,6 +64,7 @@ class Upload(DescriptionWidget, ValueWidget, CoreWidget):
     chunk_complete = lambda self, name, count, total: None
     file_complete = lambda self, name: None
     all_files_complete = lambda self, names: None
+    custom_path = lambda self, names: None
 
     def __init__(self, **kwargs):
         super(Upload, self).__init__(**kwargs)
@@ -73,13 +74,15 @@ class Upload(DescriptionWidget, ValueWidget, CoreWidget):
         if 'chunk_complete' in kwargs: self.chunk_complete = kwargs['chunk_complete']
         if 'file_complete' in kwargs: self.file_complete = kwargs['file_complete']
         if 'all_files_complete' in kwargs: self.all_files_complete = kwargs['all_files_complete']
+        if 'custom_path' in kwargs: self.custom_path = kwargs['custom_path']
 
     @default('description')
     def _default_description(self):
         return 'Upload'
 
     @staticmethod
-    def write_chunk(name, encoded_chunk, first_chunk):
+    def write_chunk(name, encoded_chunk, first_chunk, custom_path=''):
+        name = custom_path + name
         mode = 'wb' if first_chunk else 'ab'
         try:
             with open(name, mode) as f:
@@ -94,7 +97,8 @@ class Upload(DescriptionWidget, ValueWidget, CoreWidget):
             name = content.get('file', '')
             encoded_chunk = content.get('chunk', '')
             first_chunk = content.get('count', '') == 1
-            Upload.write_chunk(name, encoded_chunk, first_chunk)
+            Upload.write_chunk(name, encoded_chunk,
+                               first_chunk, self.custom_path)
             self.chunk_complete(name=content.get('file', None),
                                 count=content.get('count', None),
                                 total=content.get('total', None))

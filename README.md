@@ -49,6 +49,7 @@ ipyuploads.Upload(accept='txt',           # Accept only text files
                   chunk_complete=foo,     # Callback when a chunk upload completes
                   file_complete=bar,      # Callback when a file upload completes
                   all_files_complete=baz, # Callback when all files complete
+                  custom_path=custom_path # Custom path to upload
                   )
 ```
 
@@ -69,13 +70,13 @@ def file_complete(name):
        name - Name of the file that was just uploaded"""
     print('FILE CALLBACK! ' + name)
 
-def all_files_complete(metadatas):
+def all_files_complete(names):
     """Callback to be executed once all selected files finish uploading
     
-       metadatas - A list of metadata objects, one for each file. Each contains:
+       names - A list of metadata objects, one for each file. Each contains:
                    { 'name': 'the file's name', 
                      'type': 'mime-type of the file', 
                      'last_modified': last modified data as an integer 
                                       (number of milliseconds since the epoch) }"""
-    print(f'ALL FILES CALLBACK! {metadatas}')
+    print(f'ALL FILES CALLBACK! {names}')
 ```

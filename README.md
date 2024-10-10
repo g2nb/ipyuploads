@@ -49,7 +49,7 @@ ipyuploads.Upload(accept='txt',           # Accept only text files
                   chunk_complete=foo,     # Callback when a chunk upload completes
                   file_complete=bar,      # Callback when a file upload completes
                   all_files_complete=baz, # Callback when all files complete
-                  custom_path=custom_path # Custom path to upload
+                  upload_dir=path         # Custom dir path to upload to
                   )
 ```
 

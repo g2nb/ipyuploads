@@ -1,4 +1,6 @@
 import base64
+import os.path
+
 from ipywidgets import ButtonStyle, register, CoreWidget, ValueWidget, widget_serialization
 from ipywidgets.widgets.trait_types import InstanceDict
 from ipywidgets.widgets.widget_description import DescriptionWidget
@@ -60,11 +62,11 @@ class Upload(DescriptionWidget, ValueWidget, CoreWidget):
                                                            from_json=ValueSerialization.deserialize_value,
                                                            to_json=ValueSerialization.serialize_value)
     busy = Bool(help='Is the widget busy uploading files').tag(sync=True)
+    upload_dir = Unicode(help='Optionally set a path to upload to').tag(sync=True)
 
     chunk_complete = lambda self, name, count, total: None
     file_complete = lambda self, name: None
     all_files_complete = lambda self, names: None
-    custom_path = lambda self, names: None
 
     def __init__(self, **kwargs):
         super(Upload, self).__init__(**kwargs)
@@ -74,15 +76,13 @@ class Upload(DescriptionWidget, ValueWidget, CoreWidget):
         if 'chunk_complete' in kwargs: self.chunk_complete = kwargs['chunk_complete']
         if 'file_complete' in kwargs: self.file_complete = kwargs['file_complete']
         if 'all_files_complete' in kwargs: self.all_files_complete = kwargs['all_files_complete']
-        if 'custom_path' in kwargs: self.custom_path = kwargs['custom_path']
 
     @default('description')
     def _default_description(self):
         return 'Upload'
 
-    @staticmethod
-    def write_chunk(name, encoded_chunk, first_chunk, custom_path=''):
-        name = custom_path + name
+    def write_chunk(self, name, encoded_chunk, first_chunk):
+        name = os.path.join(self.upload_dir, name)
         mode = 'wb' if first_chunk else 'ab'
         try:
             with open(name, mode) as f:
@@ -97,8 +97,7 @@ class Upload(DescriptionWidget, ValueWidget, CoreWidget):
             name = content.get('file', '')
             encoded_chunk = content.get('chunk', '')
             first_chunk = content.get('count', '') == 1
-            Upload.write_chunk(name, encoded_chunk,
-                               first_chunk, self.custom_path)
+            self.write_chunk(name, encoded_chunk, first_chunk)
             self.chunk_complete(name=content.get('file', None),
                                 count=content.get('count', None),
                                 total=content.get('total', None))
